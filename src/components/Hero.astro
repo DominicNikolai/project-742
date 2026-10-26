@@ -1,0 +1,322 @@
+<canvas class='hero-canvas' aria-hidden='true'></canvas>
+
+<style is:global>
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #000;
+  }
+
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+</style>
+
+<script>
+  import {
+    Color,
+    Mesh,
+    OrthographicCamera,
+    PlaneGeometry,
+    Scene,
+    ShaderMaterial,
+    Timer,
+    Vector2,
+    WebGLRenderer,
+  } from 'three';
+  import GUI from 'lil-gui';
+
+  const params = {
+    color1: '#6619cc',
+    color2: '#e63380',
+    color3: '#1accff',
+    speed: 0.062,
+    angleCos: -2.57,
+    angleSin: 1.73,
+    pole1Radius: -0.97,
+    pole1Wave: -0.366,
+    pole2Radius: 2.71,
+    pole2Wave: 0.156,
+    baseWaveAmplitude: 1.24,
+    frequency: 19.05,
+    thickness: 0.4842,
+    power: 0.4921,
+    holoIntensity: 2.0,
+    dpr: 1.0,
+    aaLevel: 2,
+  };
+
+  const canvas = document.querySelector<HTMLCanvasElement>('.hero-canvas');
+
+  if (!canvas) throw new Error('Hero canvas not found');
+
+  const renderer = new WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(params.dpr);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const scene = new Scene();
+  const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+  const uniforms = {
+    u_time: { value: 0.0 },
+    u_resolution: { value: new Vector2(window.innerWidth, window.innerHeight) },
+    u_color1: { value: new Color(params.color1) },
+    u_color2: { value: new Color(params.color2) },
+    u_color3: { value: new Color(params.color3) },
+    u_speed: { value: params.speed },
+    u_angleCos: { value: params.angleCos },
+    u_angleSin: { value: params.angleSin },
+    u_pole1Radius: { value: params.pole1Radius },
+    u_pole1Wave: { value: params.pole1Wave },
+    u_pole2Radius: { value: params.pole2Radius },
+    u_pole2Wave: { value: params.pole2Wave },
+    u_baseWaveAmplitude: { value: params.baseWaveAmplitude },
+    u_freq: { value: params.frequency },
+    u_thick: { value: params.thickness },
+    u_power: { value: params.power },
+    u_holoIntensity: { value: params.holoIntensity },
+  };
+
+  const vertexShader = `
+    void main() {
+      gl_Position = vec4(position, 1.0);
+    }
+  `;
+
+  const fragmentShader = `
+    uniform float u_time;
+    uniform vec2 u_resolution;
+
+    uniform vec3 u_color1;
+    uniform vec3 u_color2;
+    uniform vec3 u_color3;
+
+    uniform float u_speed;
+    uniform float u_angleCos;
+    uniform float u_angleSin;
+
+    uniform float u_pole1Radius;
+    uniform float u_pole1Wave;
+    uniform float u_pole2Radius;
+    uniform float u_pole2Wave;
+    uniform float u_baseWaveAmplitude;
+
+    uniform float u_freq;
+    uniform float u_thick;
+    uniform float u_power;
+
+    uniform float u_holoIntensity;
+
+    #ifndef AA
+    #define AA 2
+    #endif
+
+    vec3 getGradient(float t) {
+      t = clamp(t, 0.0, 1.0);
+
+      vec3 blend1 = mix(u_color1, u_color2, smoothstep(0.0, 0.5, t));
+      vec3 blend2 = mix(u_color2, u_color3, smoothstep(0.5, 1.0, t));
+
+      return mix(blend1, blend2, step(0.5, t));
+    }
+
+    vec2 getWarpedDomain(vec2 p) {
+      float t = u_time * u_speed;
+
+      float c = cos(u_angleCos), s = sin(u_angleSin);
+      p *= mat2(c, -s, s, c);
+
+      vec2 pole1 = vec2(sin(t * -2.1), cos(t * 0.4)) * u_pole1Radius;
+      float d1 = sqrt(dot(p - pole1, p - pole1) + 1.0);
+      p.y += sin(d1 * 2.4 - t * 3.0) * u_pole1Wave;
+
+      vec2 pole2 = vec2(cos(t * 0.7), -sin(t * 1.1)) * u_pole2Radius;
+      float d2 = sqrt(dot(p - pole2, p - pole2) + 1.0);
+      p.x += cos(d2 * 2.0 + t * 1.2) * u_pole2Wave;
+
+      p.y += sin(p.x * 1.5 + t * -2.0) * u_baseWaveAmplitude;
+
+      return p;
+    }
+
+    float map(vec2 p) {
+      vec2 warpedP = getWarpedDomain(p);
+
+      float wave = sin(warpedP.y * u_freq);
+
+      float normalizedWave = wave * u_thick + 0.5;
+      float height = pow(clamp(normalizedWave, 0.0, 1.0), u_power);
+
+      return height * 0.25;
+    }
+
+    vec3 getNormal(vec2 p) {
+      vec2 e = vec2(0.01, 0.0);
+      float h = map(p);
+
+      return normalize(vec3(
+        map(p + e.xy) - h,
+        map(p + e.yx) - h,
+        0.017
+      ));
+    }
+
+    vec3 getSceneColor(vec2 fragCoord) {
+      vec2 uv = (fragCoord * 3.6 - u_resolution.xy) / u_resolution.y;
+
+      vec3 n = getNormal(uv);
+
+      vec2 warpedP = getWarpedDomain(uv);
+
+      float lineID = floor((warpedP.y * (u_freq * 0.934)) / 7.1931853);
+
+      vec2 rotP = uv * mat2(cos(0.0), -sin(0.4), sin(0.7), cos(1.3));
+      float gradPos = rotP.y * 0.35 + 0.3;
+
+      vec3 viewDir = normalize(vec3(0.0, 0.0, 1.0));
+      vec3 lightDir1 = normalize(vec3(0.4, 0.7, 0.6));
+      vec3 lightDir2 = normalize(vec3(-0.6, -0.4, 0.3));
+
+      vec3 baseColor = getGradient(gradPos);
+
+      float internalGrad = smoothstep(-0.6, 1.0, n.y + n.x * 0.3);
+      vec3 lineVolumeColor = mix(baseColor * 0.2, baseColor, internalGrad);
+
+      float diff1 = max(dot(n, lightDir1), 0.0);
+      float diff2 = max(dot(n, lightDir2), 0.0);
+
+      vec3 refDir1 = reflect(-lightDir1, n);
+      float spec1 = pow(max(dot(viewDir, refDir1), 0.0), 40.0) * 1.5;
+
+      float fresnel = pow(1.0 - max(dot(n, viewDir), 0.0), 2.4);
+
+      vec3 holographicSpectrum = 0.5 + 0.5 * cos(u_time + warpedP.x * 3.0 + lineID * 1.2 + vec3(0.0, 2.0, 4.0));
+
+      vec3 color = lineVolumeColor * (diff1 * 0.8 + 0.1);
+      color += baseColor * diff2 * 0.3;
+      color += vec3(1.0, 0.95, 1.0) * spec1;
+      color += holographicSpectrum * fresnel * u_holoIntensity;
+
+      return color;
+    }
+
+    void main() {
+      vec3 totalColor = vec3(0.0);
+
+      for (int y = 0; y < AA; y++) {
+        for (int x = 0; x < AA; x++) {
+          vec2 offset = (vec2(float(x), float(y)) + 0.5) / float(AA) - 0.5;
+          totalColor += getSceneColor(gl_FragCoord.xy + offset);
+        }
+      }
+
+      totalColor /= float(AA * AA);
+
+      totalColor = pow(totalColor, vec3(0.85));
+
+      gl_FragColor = vec4(totalColor, 1.0);
+    }
+  `;
+
+  const material = new ShaderMaterial({
+    vertexShader,
+    fragmentShader,
+    uniforms,
+    defines: { AA: params.aaLevel },
+  });
+
+  scene.add(new Mesh(new PlaneGeometry(2, 2), material));
+
+  const gui = new GUI({ title: 'Shader Settings' });
+
+  const addSlider = (
+    folder: GUI,
+    key: keyof typeof params,
+    label: string,
+    min: number,
+    max: number,
+    uniform: { value: number },
+  ) =>
+    folder
+      .add(params, key, min, max)
+      .name(label)
+      .onChange((value: number) => (uniform.value = value));
+
+  const addColor = (
+    folder: GUI,
+    key: 'color1' | 'color2' | 'color3',
+    label: string,
+    uniform: { value: Color },
+  ) =>
+    folder
+      .addColor(params, key)
+      .name(label)
+      .onChange((value: string) => uniform.value.set(value));
+
+  const colorFolder = gui.addFolder('Gradient Colors');
+  addColor(colorFolder, 'color1', 'Color 1 (Top)', uniforms.u_color1);
+  addColor(colorFolder, 'color2', 'Color 2 (Mid)', uniforms.u_color2);
+  addColor(colorFolder, 'color3', 'Color 3 (Bot)', uniforms.u_color3);
+
+  const animationFolder = gui.addFolder('Animation');
+  addSlider(animationFolder, 'speed', 'Flow Speed', -0.5, 0.5, uniforms.u_speed);
+
+  const geometryFolder = gui.addFolder('Deformation & Rotation');
+  addSlider(geometryFolder, 'angleCos', 'Angle Cosine', -5.0, 5.0, uniforms.u_angleCos);
+  addSlider(geometryFolder, 'angleSin', 'Angle Sine', -5.0, 5.0, uniforms.u_angleSin);
+
+  const polesFolder = gui.addFolder('Magnetic Poles');
+  addSlider(polesFolder, 'pole1Radius', 'Pole 1 Radius', -5.0, 5.0, uniforms.u_pole1Radius);
+  addSlider(polesFolder, 'pole1Wave', 'Pole 1 Wave Amp', -3.0, 3.0, uniforms.u_pole1Wave);
+  addSlider(polesFolder, 'pole2Radius', 'Pole 2 Radius', -5.0, 5.0, uniforms.u_pole2Radius);
+  addSlider(polesFolder, 'pole2Wave', 'Pole 2 Wave Amp', -3.0, 3.0, uniforms.u_pole2Wave);
+  addSlider(polesFolder, 'baseWaveAmplitude', 'Base Wave Amp', -5.0, 5.0, uniforms.u_baseWaveAmplitude);
+
+  const linesFolder = gui.addFolder('Lines / Blinds');
+  addSlider(linesFolder, 'frequency', 'Frequency', 5.0, 30.0, uniforms.u_freq);
+  addSlider(linesFolder, 'thickness', 'Thickness', 0.1, 1.0, uniforms.u_thick);
+  addSlider(linesFolder, 'power', 'Sharpness (Power)', 0.1, 2.0, uniforms.u_power);
+
+  const effectsFolder = gui.addFolder('Effects');
+  addSlider(effectsFolder, 'holoIntensity', 'Holo Intensity', 0.0, 5.0, uniforms.u_holoIntensity);
+
+  const renderFolder = gui.addFolder('Render Quality');
+  renderFolder
+    .add(params, 'aaLevel', { 'Off (1x)': 1, 'Good (2x2)': 2, 'High (3x3)': 3, 'Ultra (4x4)': 4 })
+    .name('Anti-Aliasing')
+    .onChange((value: number) => {
+      material.defines.AA = value;
+      material.needsUpdate = true;
+    });
+
+  renderFolder
+    .add(params, 'dpr', [0.5, 1, 1.5, 2])
+    .name('Pixel Ratio (DPR)')
+    .onChange((value: number) => renderer.setPixelRatio(value));
+
+  gui.close();
+
+  window.addEventListener('resize', () => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    renderer.setSize(width, height);
+    uniforms.u_resolution.value.set(width, height);
+  });
+
+  const timer = new Timer();
+
+  const animate = () => {
+    requestAnimationFrame(animate);
+
+    timer.update();
+    uniforms.u_time.value = timer.getElapsed();
+
+    renderer.render(scene, camera);
+  };
+
+  animate();
+</script>
