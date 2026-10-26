@@ -25,7 +25,7 @@
     ShaderMaterial,
     Timer,
     Vector2,
-    WebGLRenderer,
+    WebGLRenderer
   } from 'three';
   import GUI from 'lil-gui';
 
@@ -46,7 +46,7 @@
     power: 0.4921,
     holoIntensity: 2.0,
     dpr: 1.0,
-    aaLevel: 2,
+    aaLevel: 2
   };
 
   const canvas = document.querySelector<HTMLCanvasElement>('.hero-canvas');
@@ -77,7 +77,7 @@
     u_freq: { value: params.frequency },
     u_thick: { value: params.thickness },
     u_power: { value: params.power },
-    u_holoIntensity: { value: params.holoIntensity },
+    u_holoIntensity: { value: params.holoIntensity }
   };
 
   const vertexShader = `
@@ -225,7 +225,7 @@
     vertexShader,
     fragmentShader,
     uniforms,
-    defines: { AA: params.aaLevel },
+    defines: { AA: params.aaLevel }
   });
 
   scene.add(new Mesh(new PlaneGeometry(2, 2), material));
@@ -238,7 +238,7 @@
     label: string,
     min: number,
     max: number,
-    uniform: { value: number },
+    uniform: { value: number }
   ) =>
     folder
       .add(params, key, min, max)
@@ -249,7 +249,7 @@
     folder: GUI,
     key: 'color1' | 'color2' | 'color3',
     label: string,
-    uniform: { value: Color },
+    uniform: { value: Color }
   ) =>
     folder
       .addColor(params, key)
@@ -265,27 +265,95 @@
   addSlider(animationFolder, 'speed', 'Flow Speed', -0.5, 0.5, uniforms.u_speed);
 
   const geometryFolder = gui.addFolder('Deformation & Rotation');
-  addSlider(geometryFolder, 'angleCos', 'Angle Cosine', -5.0, 5.0, uniforms.u_angleCos);
-  addSlider(geometryFolder, 'angleSin', 'Angle Sine', -5.0, 5.0, uniforms.u_angleSin);
+  addSlider(
+    geometryFolder,
+    'angleCos',
+    'Angle Cosine',
+    -5.0,
+    5.0,
+    uniforms.u_angleCos
+  );
+  addSlider(
+    geometryFolder,
+    'angleSin',
+    'Angle Sine',
+    -5.0,
+    5.0,
+    uniforms.u_angleSin
+  );
 
   const polesFolder = gui.addFolder('Magnetic Poles');
-  addSlider(polesFolder, 'pole1Radius', 'Pole 1 Radius', -5.0, 5.0, uniforms.u_pole1Radius);
-  addSlider(polesFolder, 'pole1Wave', 'Pole 1 Wave Amp', -3.0, 3.0, uniforms.u_pole1Wave);
-  addSlider(polesFolder, 'pole2Radius', 'Pole 2 Radius', -5.0, 5.0, uniforms.u_pole2Radius);
-  addSlider(polesFolder, 'pole2Wave', 'Pole 2 Wave Amp', -3.0, 3.0, uniforms.u_pole2Wave);
-  addSlider(polesFolder, 'baseWaveAmplitude', 'Base Wave Amp', -5.0, 5.0, uniforms.u_baseWaveAmplitude);
+  addSlider(
+    polesFolder,
+    'pole1Radius',
+    'Pole 1 Radius',
+    -5.0,
+    5.0,
+    uniforms.u_pole1Radius
+  );
+  addSlider(
+    polesFolder,
+    'pole1Wave',
+    'Pole 1 Wave Amp',
+    -3.0,
+    3.0,
+    uniforms.u_pole1Wave
+  );
+  addSlider(
+    polesFolder,
+    'pole2Radius',
+    'Pole 2 Radius',
+    -5.0,
+    5.0,
+    uniforms.u_pole2Radius
+  );
+  addSlider(
+    polesFolder,
+    'pole2Wave',
+    'Pole 2 Wave Amp',
+    -3.0,
+    3.0,
+    uniforms.u_pole2Wave
+  );
+  addSlider(
+    polesFolder,
+    'baseWaveAmplitude',
+    'Base Wave Amp',
+    -5.0,
+    5.0,
+    uniforms.u_baseWaveAmplitude
+  );
 
   const linesFolder = gui.addFolder('Lines / Blinds');
   addSlider(linesFolder, 'frequency', 'Frequency', 5.0, 30.0, uniforms.u_freq);
   addSlider(linesFolder, 'thickness', 'Thickness', 0.1, 1.0, uniforms.u_thick);
-  addSlider(linesFolder, 'power', 'Sharpness (Power)', 0.1, 2.0, uniforms.u_power);
+  addSlider(
+    linesFolder,
+    'power',
+    'Sharpness (Power)',
+    0.1,
+    2.0,
+    uniforms.u_power
+  );
 
   const effectsFolder = gui.addFolder('Effects');
-  addSlider(effectsFolder, 'holoIntensity', 'Holo Intensity', 0.0, 5.0, uniforms.u_holoIntensity);
+  addSlider(
+    effectsFolder,
+    'holoIntensity',
+    'Holo Intensity',
+    0.0,
+    5.0,
+    uniforms.u_holoIntensity
+  );
 
   const renderFolder = gui.addFolder('Render Quality');
   renderFolder
-    .add(params, 'aaLevel', { 'Off (1x)': 1, 'Good (2x2)': 2, 'High (3x3)': 3, 'Ultra (4x4)': 4 })
+    .add(params, 'aaLevel', {
+      'Off (1x)': 1,
+      'Good (2x2)': 2,
+      'High (3x3)': 3,
+      'Ultra (4x4)': 4
+    })
     .name('Anti-Aliasing')
     .onChange((value: number) => {
       material.defines.AA = value;
